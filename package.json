@@ -1,0 +1,1 @@
+{"private":true,"type":"module","scripts":{"test":"node test.mjs","start":"node serve.ts","dossier":"MAKEFUN_OUTPUT_DIR=out node main.ts"}}
