@@ -29,6 +29,10 @@ Four finite-ammunition weapons have distinct cadence, spread, recoil, damage and
 
 Original geometry, palette, weapon names, synthesized audio and map. No commercial-game assets.
 
+The daylight revision adds procedural concrete/asphalt textures, corrugated freight buildings, warehouses, crane, storage tanks, ocean, dock railings, road paint, drains, crates and relay terminals. Operators have helmets, armor pouches, articulated walking legs, gloves and rifles with shot-driven muzzle flashes. Static scenery is batched by material.
+
+The cover is a real Chrome render of a reproducible crossfire training setup (`game/scenarios.js`), with three ordinary bots using the same shooting, ammunition, damage and AI as a regular round. To reproduce from the browser console after loading: `game.start(); game.buy(2); game.state.phaseTime=0; game.step(1); game.crossfire(); game.step(8);`. The setup only places actors; it does not fabricate firing effects or change their health.
+
 ## Validation
 
 ```sh
