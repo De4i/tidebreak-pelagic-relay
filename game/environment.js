@@ -1,39 +1,274 @@
 import * as THREE from 'three';
 import { MAP } from './map.js';
-// Original procedural surface textures: concrete aggregate, pavement, planked crates.
-function surface(base,kind){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d');ctx.fillStyle=base;ctx.fillRect(0,0,256,256);let seed=7193;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};for(let i=0;i<12000;i++){const gray=Math.floor(random()*80)+90;ctx.fillStyle=`rgba(${gray},${gray},${gray},${random()*.18})`;ctx.fillRect(random()*256,random()*256,1+random()*3,1+random()*2);}if(kind==='concrete'){ctx.strokeStyle='#746f6325';for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(i*64,0);ctx.lineTo(i*64,256);ctx.stroke();}ctx.fillStyle='#ffffff16';ctx.fillRect(0,0,256,2);}if(kind==='wood'){for(let i=0;i<8;i++){ctx.fillStyle=i%2?'#00000030':'#ffffff15';ctx.fillRect(0,i*32,256,2);}ctx.strokeStyle='#694a2f50';for(let i=0;i<25;i++){ctx.beginPath();ctx.moveTo(0,random()*256);ctx.lineTo(256,random()*256);ctx.stroke();}}const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
-export function buildEnvironment(view){const scene=view.scene;
- const concreteTex=surface('#bfb7a5','concrete'),roadTex=surface('#7e888a','road'),woodTex=surface('#aa8359','wood');roadTex.repeat.set(22,22);concreteTex.repeat.set(2,2);
- const concrete=new THREE.MeshStandardMaterial({map:concreteTex,roughness:.94}),road=new THREE.MeshStandardMaterial({map:roadTex,roughness:.96}),wood=new THREE.MeshStandardMaterial({map:woodTex,roughness:.86});
- const painted=new THREE.MeshStandardMaterial({color:0xc7d4cf,roughness:.75}),blue=new THREE.MeshStandardMaterial({color:0x3c6778,roughness:.7}),rust=new THREE.MeshStandardMaterial({color:0xad6745,roughness:.85}),dark=new THREE.MeshStandardMaterial({color:0x344247,roughness:.65}),yellow=new THREE.MeshStandardMaterial({color:0xe6b23e,roughness:.65}),steel=new THREE.MeshStandardMaterial({color:0x87979c,roughness:.45,metalness:.55});
- function box(w,h,d,x,y,z,m){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;scene.add(o);return o;}
- function cylinder(r,h,x,y,z,m){const o=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,12),m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;scene.add(o);return o;}
- scene.background=new THREE.Color(0xaed5e9);scene.fog=new THREE.Fog(0xc4dce3,48,170);
- scene.add(new THREE.HemisphereLight(0xe4f4ff,0x8e927b,2.25));scene.add(new THREE.AmbientLight(0xffffff,.45));
- const sun=new THREE.DirectionalLight(0xffefd6,3.0);sun.position.set(-25,45,28);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-42;sun.shadow.camera.right=42;sun.shadow.camera.top=42;sun.shadow.camera.bottom=-42;sun.shadow.camera.near=.5;sun.shadow.camera.far=130;sun.shadow.normalBias=.035;sun.shadow.bias=-.0003;scene.add(sun);view.renderer.toneMappingExposure=1.05;
- const ground=new THREE.Mesh(new THREE.PlaneGeometry(58,58),road);ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
- // Geometry exactly matches the simulation's walls; dressing stays on those footprints.
- for(let i=0;i<MAP.walls.length;i++){const [x,z,w,d,h]=MAP.walls[i];if(i<4){box(w,h,d,x,h/2,z,concrete);box(w+.05,.2,d+.05,x,h,z,painted);for(let t=-Math.max(w,d)/2+2;t<Math.max(w,d)/2;t+=6){const xx=w>d?x+t:x,zz=d>w?z+t:z;box(w>d?.3:w+.06,h,.3+(w>d?d:0),xx,h/2,zz,painted);}}else if(h>3){const material=i%2?blue:rust;box(w,h,d,x,h/2,z,material);box(w+.12,.12,d+.12,x,h,z,steel);const longX=w>d;for(let t=-Math.max(w,d)/2+.3;t<Math.max(w,d)/2;t+=.48){box(longX?.055:w+.04,h-.2,longX?d+.04:.055,longX?x+t:x,h/2,longX?z:z+t,material);}box(w+.04,.18,d+.04,x,.25,z,dark);view.sign(i%2?'RELAY LOGISTICS':'PELAGIC / FREIGHT',x,h*.68,z+d/2+.035,'#f5ead1',Math.min(3.3,w*.8));}else {box(w,h,d,x,h/2,z,concrete);box(w+.02,.13,d+.02,x,h-.14,z,yellow);for(let t=-w/2+.25;t<w/2;t+=.6){const stripe=box(.24,.15,.015,x+t,h-.14,z+d/2+.02,dark);stripe.rotation.z=-.4;}}}
- // Paint, drainage grates and cable runs are flush so they do not create invisible collisions.
- for(let z=-24;z<27;z+=4)for(const x of [-24,24])box(.12,.008,2.1,x,.013,z,yellow);
- for(let z=-20;z<25;z+=10){box(1.6,.02,.45,0,.02,z,dark);for(let x=-.7;x<.8;x+=.13)box(.025,.025,.43,x,.03,z,steel);}
- for(const x of [-26,26]){box(.3,.1,50,x,.06,0,concrete);for(let z=-23;z<27;z+=8){cylinder(.07,5.8,x,2.9,z,steel);box(1.4,.13,.5,x,5.8,z,painted);}}
- for(const site of MAP.sites){const color=site.name==='A'?yellow:blue;for(const dx of [-3.4,3.4])box(.12,.012,6.8,site.x+dx,.025,site.z,color);for(const dz of [-3.4,3.4])box(6.8,.012,.12,site.x,.025,site.z+dz,color);view.sign(site.name+' / '+site.label,site.x,3.8,site.z-4,'#ffe0a0',5);const term=box(.65,1.1,.4,site.x,0.55,site.z,steel);box(.45,.32,.02,site.x,.8,site.z+.22,new THREE.MeshBasicMaterial({color:0x32a68b}));}
- // Dense skyline outside the combat boundaries: warehouse, gantry, tanks, dock and ocean.
- const ocean=new THREE.Mesh(new THREE.PlaneGeometry(700,700),new THREE.MeshStandardMaterial({color:0x4795b2,roughness:.32,metalness:.25}));ocean.rotation.x=-Math.PI/2;ocean.position.set(0,-1.4,0);scene.add(ocean);
- box(82,1,76,0,-.7,0,concrete);
- for(const x of [-39,39]){box(16,10,50,x,4.5,-3,concrete);box(17,.3,52,x,9.7,-3,blue);for(let z=-22;z<23;z+=7){box(.05,2.4,3,x>0?x-8.03:x+8.03,5.9,z,blue);box(.06,.12,3.1,x>0?x-8.07:x+8.07,5.9,z,steel);}for(let z=-20;z<22;z+=10){box(1.1,1.8,2,x>0?x-8.5:x+8.5,7.7,z,painted);for(let j=0;j<5;j++)box(.04,.04,1.8,x>0?x-9.07:x+9.07,7.1+j*.22,z,dark);}}
- for(const x of [-20,20]){cylinder(3.4,11,x,5,-39,painted);cylinder(3.48,.3,x,1,-39,blue);cylinder(3.48,.3,x,8,-39,blue);cylinder(.32,3,x,12,-39,steel);box(.5,10,.35,x+3.6,5,-39,steel);}
- for(const x of [-23,23]){box(.8,22,.8,x,11,-35,yellow);box(2,.7,2,x,21.5,-35,steel);}box(48,.9,.9,0,22,-35,yellow);box(.3,.3,18,0,22,-26,steel);box(.4,8,.4,0,17,-17,steel);cylinder(.5,.65,0,12.7,-17,dark);
- box(10,2.4,18,2,0,-58,blue);box(5,3,5,2,2.5,-55,painted);cylinder(.1,10,2,7,-55,steel);
- for(const [x,z]of [[-20,5],[20,5],[-7,10],[7,10]]){for(let k=0;k<2;k++){const dx=x<0?-.2:.2;const base=Math.abs(x)===20?3.7:4.6;box(1,1,1,x+dx,base+.5+k,z,wood);box(1.04,.07,1.04,x+dx,base+.15+k,z,dark);box(1.04,.07,1.04,x+dx,base+.85+k,z,dark);}}
- // Exterior railing, mooring bollards and warning boards.
- for(let x=-30;x<=30;x+=3){cylinder(.08,1.3,x,.4,35,steel);if(x%6===0)cylinder(.3,.5,x,-.1,34,yellow);}box(60,.08,.08,0,1.04,35,steel);
- view.sign('PELAGIC RELAY  /  NORTH DOCK',0,8,-27,'#f0d5a3',12);
- view.sign('AUTHORIZED PERSONNEL ONLY',-20,3.4,27,'#f0d5a3',6);
- // Batch static geometry by material: texture detail should not require thousands of draws.
- const batches=new Map();scene.updateMatrixWorld(true);
- for(const child of [...scene.children]){if(!child.isMesh||Array.isArray(child.material))continue;let list=batches.get(child.material);if(!list)batches.set(child.material,list=[]);const g=child.geometry.index?child.geometry.toNonIndexed():child.geometry.clone();g.applyMatrix4(child.matrixWorld);list.push(g);scene.remove(child);child.geometry.dispose();}
- for(const [material,geometries]of batches){const merged=new THREE.BufferGeometry();for(const name of ['position','normal','uv']){const arrays=geometries.map(g=>g.getAttribute(name));if(arrays.some(a=>!a))continue;const data=new Float32Array(arrays.reduce((n,a)=>n+a.array.length,0));let offset=0;for(const a of arrays){data.set(a.array,offset);offset+=a.array.length;}merged.setAttribute(name,new THREE.BufferAttribute(data,arrays[0].itemSize));}const mesh=new THREE.Mesh(merged,material);mesh.castShadow=mesh.receiveShadow=true;scene.add(mesh);for(const g of geometries)g.dispose();}
- view.buildWeapon();
+
+// Original procedural surfaces built from a seeded stream: no image files, no borrowed art.
+function surface(base, kind, seed = 7193) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 256, 256);
+  let state = seed;
+  const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296; };
+  for (let i = 0; i < 9000; i++) {
+    const tone = Math.floor(random() * 70) + 96;
+    ctx.fillStyle = `rgba(${tone},${tone},${tone - 6},${random() * 0.16})`;
+    ctx.fillRect(random() * 256, random() * 256, 1 + random() * 3, 1 + random() * 2);
+  }
+  if (kind === 'concrete') {
+    ctx.strokeStyle = '#6f6a5c22';
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(i * 64, 0); ctx.lineTo(i * 64, 256); ctx.stroke(); }
+    ctx.fillStyle = '#ffffff14';
+    ctx.fillRect(0, 0, 256, 2);
+  } else if (kind === 'asphalt') {
+    ctx.fillStyle = '#20262a55';
+    for (let i = 0; i < 700; i++) ctx.fillRect(random() * 256, random() * 256, 2, 2);
+    ctx.strokeStyle = '#8b8f8a18';
+    for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(0, random() * 256); ctx.lineTo(256, random() * 256); ctx.stroke(); }
+  } else if (kind === 'corrugated') {
+    for (let i = 0; i < 32; i++) {
+      ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.13)';
+      ctx.fillRect(i * 8, 0, 5, 256);
+    }
+    ctx.fillStyle = 'rgba(140,80,50,0.12)';
+    for (let i = 0; i < 40; i++) ctx.fillRect(random() * 256, random() * 256, 3 + random() * 10, 2 + random() * 5);
+  } else if (kind === 'wood') {
+    for (let i = 0; i < 8; i++) {
+      ctx.fillStyle = i % 2 ? 'rgba(0,0,0,0.20)' : 'rgba(255,255,255,0.10)';
+      ctx.fillRect(0, i * 32, 256, 2);
+    }
+    ctx.strokeStyle = '#6b4a2f55';
+    for (let i = 0; i < 26; i++) { ctx.beginPath(); ctx.moveTo(0, random() * 256); ctx.lineTo(256, random() * 256); ctx.stroke(); }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Boxes that belong to a merged batch: geometry plus the matrix that places it in the world.
+function batcher() {
+  const groups = new Map();
+  return {
+    add(w, h, d, x, y, z, material, rx = 0, ry = 0, rz = 0) {
+      const geometry = new THREE.BoxGeometry(w, h, d);
+      const mesh = new THREE.Mesh(geometry);
+      mesh.position.set(x, y, z);
+      mesh.rotation.set(rx, ry, rz);
+      mesh.updateMatrix();
+      geometry.applyMatrix4(mesh.matrix);
+      let list = groups.get(material);
+      if (!list) groups.set(material, (list = []));
+      list.push(geometry);
+    },
+    addShape(geometry, x, y, z, material) {
+      const mesh = new THREE.Mesh(geometry);
+      mesh.position.set(x, y, z);
+      mesh.updateMatrix();
+      geometry.applyMatrix4(mesh.matrix);
+      let list = groups.get(material);
+      if (!list) groups.set(material, (list = []));
+      list.push(geometry);
+    },
+    flush(scene) {
+      for (const [material, geometries] of groups) {
+        const merged = new THREE.BufferGeometry();
+        for (const name of ['position', 'normal', 'uv']) {
+          const arrays = geometries.map((g) => g.getAttribute(name));
+          if (arrays.some((a) => !a)) continue;
+          const data = new Float32Array(arrays.reduce((n, a) => n + a.array.length, 0));
+          let offset = 0;
+          for (const a of arrays) { data.set(a.array, offset); offset += a.array.length; }
+          merged.setAttribute(name, new THREE.BufferAttribute(data, arrays[0].itemSize));
+        }
+        const mesh = new THREE.Mesh(merged, material);
+        mesh.castShadow = mesh.receiveShadow = true;
+        scene.add(mesh);
+        for (const g of geometries) g.dispose();
+      }
+      groups.clear();
+    },
+  };
+}
+
+export function buildEnvironment(view) {
+  const scene = view.scene;
+  const concreteTex = surface('#c3bbaa', 'concrete', 7311);
+  const asphaltTex = surface('#8b9498', 'asphalt', 4489);
+  const woodTex = surface('#ad8a5f', 'wood', 991);
+  const steelTex = surface('#93a3a8', 'corrugated', 557);
+  concreteTex.repeat.set(2, 2);
+  asphaltTex.repeat.set(24, 24);
+  woodTex.repeat.set(1, 1);
+  steelTex.repeat.set(1, 1);
+
+  const materials = {
+    concrete: new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.94 }),
+    road: new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.96 }),
+    wood: new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.88 }),
+    teal: new THREE.MeshStandardMaterial({ map: steelTex, color: 0x4c7f8c, roughness: 0.55, metalness: 0.35 }),
+    rust: new THREE.MeshStandardMaterial({ map: steelTex, color: 0xb0704a, roughness: 0.72, metalness: 0.3 }),
+    navy: new THREE.MeshStandardMaterial({ color: 0x33556b, roughness: 0.7 }),
+    painted: new THREE.MeshStandardMaterial({ color: 0xd2dade, roughness: 0.7 }),
+    haz: new THREE.MeshStandardMaterial({ color: 0xe8b53c, roughness: 0.65 }),
+    dark: new THREE.MeshStandardMaterial({ color: 0x354348, roughness: 0.7 }),
+    steel: new THREE.MeshStandardMaterial({ color: 0x8b9ba1, roughness: 0.45, metalness: 0.55 }),
+  };
+  const batch = batcher();
+
+  // Bright daylight: sky/ground bounce plus one sun sized to the whole playable map.
+  scene.background = new THREE.Color(0xb7dcf0);
+  scene.fog = new THREE.Fog(0xcfe4ec, 62, 210);
+  scene.add(new THREE.HemisphereLight(0xeaf7ff, 0x9a9c86, 2.15));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+  const sun = new THREE.DirectionalLight(0xfff2da, 2.9);
+  sun.position.set(-34, 52, 30);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -52;
+  sun.shadow.camera.right = 52;
+  sun.shadow.camera.top = 52;
+  sun.shadow.camera.bottom = -52;
+  sun.shadow.camera.near = 0.5;
+  sun.shadow.camera.far = 160;
+  sun.shadow.normalBias = 0.04;
+  sun.shadow.bias = -0.0004;
+  scene.add(sun);
+  view.renderer.toneMappingExposure = 1.02;
+
+  // Quay deck, then open water beyond the seawall.
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(72, 72), materials.road);
+  deck.rotation.x = -Math.PI / 2;
+  deck.receiveShadow = true;
+  scene.add(deck);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshStandardMaterial({ color: 0x3d87a8, roughness: 0.3, metalness: 0.28 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = -1.6;
+  scene.add(water);
+
+  // A lane's worth of road paint, drains and quay edging. All of it is flush: zero collisions.
+  for (let z = -32; z < 34; z += 4) {
+    for (const x of [-31, 31]) batch.add(0.16, 0.01, 2.2, x, 0.014, z, materials.haz);
+  }
+  for (const x of [-6, 6]) for (let z = -30; z < 32; z += 6) batch.add(0.14, 0.01, 3.2, x, 0.013, z, materials.painted);
+  for (let z = -26; z < 29; z += 9) {
+    batch.add(1.8, 0.03, 0.5, 0, 0.02, z, materials.dark);
+    for (let x = -0.78; x < 0.8; x += 0.14) batch.add(0.03, 0.03, 0.48, x, 0.034, z, materials.steel);
+  }
+  for (const x of [-33.6, 33.6]) {
+    batch.add(0.5, 0.16, 66, x, 0.09, 0, materials.concrete);
+    for (let z = -30; z < 32; z += 7) {
+      batch.add(0.16, 1.35, 0.16, x, 0.8, z, materials.steel);
+      batch.add(1.6, 0.1, 0.12, x + (x > 0 ? -0.8 : 0.8), 1.45, z, materials.painted);
+    }
+  }
+
+  // Every MAP solid is dressed from its own footprint, so what blocks a bullet is what you see.
+  for (const w of MAP.walls) {
+    const { x, z, w: width, d: depth, h: height, kind } = w;
+    if (kind === 'sea') {
+      batch.add(width, height, depth, x, height / 2, z, materials.concrete);
+      batch.add(width + 0.1, 0.24, depth + 0.1, x, height, z, materials.painted);
+      const long = width > depth;
+      for (let t = -Math.max(width, depth) / 2 + 2; t < Math.max(width, depth) / 2 - 1; t += 5.5) {
+        batch.add(long ? 0.3 : width + 0.08, height, long ? depth + 0.08 : 0.3, long ? x + t : x, height / 2, long ? z : z + t, materials.painted);
+      }
+    } else if (kind === 'warehouse') {
+      batch.add(width, height, depth, x, height / 2, z, materials.concrete);
+      batch.add(width + 0.5, 0.5, depth + 0.5, x, height + 0.16, z, materials.navy);
+      const long = width > depth;
+      const face = long ? depth / 2 + 0.06 : width / 2 + 0.06;
+      for (let t = -Math.max(width, depth) / 2 + 1.4; t < Math.max(width, depth) / 2 - 1.4; t += 3.2) {
+        batch.add(long ? 1.9 : 0.16, height * 0.5, long ? 0.16 : 1.9, long ? x + t : x + face, height * 0.42, long ? z + face : z + t, materials.dark);
+      }
+      // Loading doors and a roof vent stack give the block a front and a scale.
+      batch.add(long ? 4.2 : 0.2, 4.2, long ? 0.2 : 4.2, long ? x : x + face, 2.15, long ? z + face : z, materials.teal);
+      batch.add(1.1, 1.5, 1.1, x - width * 0.3, height + 1.1, z - depth * 0.22, materials.steel);
+      view.sign(w.label ?? 'PELAGIC / FREIGHT', long ? x : x + face + 0.2, height * 0.74, long ? z + face + 0.2 : z, '#f6ecd4', Math.min(4.6, Math.max(width, depth) * 0.55), long ? 0 : Math.PI / 2);
+    } else if (kind === 'freight') {
+      const material = Math.abs(x) > 20 ? materials.rust : materials.teal;
+      batch.add(width, height, depth, x, height / 2, z, material);
+      batch.add(width + 0.14, 0.16, depth + 0.14, x, height, z, materials.steel);
+      batch.add(width + 0.14, 0.16, depth + 0.14, x, 0.24, z, materials.dark);
+      const long = width > depth;
+      for (let t = -Math.max(width, depth) / 2 + 0.3; t < Math.max(width, depth) / 2; t += 0.5) {
+        batch.add(long ? 0.06 : width + 0.06, height - 0.22, long ? depth + 0.06 : 0.06, long ? x + t : x, height / 2, long ? z : z + t, material);
+      }
+      batch.add(long ? width * 0.9 : 0.1, 0.5, long ? 0.1 : depth * 0.9, long ? x : x + width / 2 + 0.02, height * 0.62, long ? z + depth / 2 + 0.02 : z, materials.haz);
+      if (w.label) view.sign(w.label, x, height + 0.8, z, '#f7e9cc', Math.min(5, Math.max(width, depth) * 0.7), long ? 0 : Math.PI / 2);
+    } else if (kind === 'crate') {
+      batch.add(width, height, depth, x, height / 2, z, materials.wood);
+      batch.add(width + 0.06, 0.09, depth + 0.06, x, height - 0.04, z, materials.dark);
+      batch.add(width + 0.06, 0.09, depth + 0.06, x, 0.06, z, materials.dark);
+      batch.add(width * 0.62, 0.05, 0.12, x, height + 0.015, z, materials.painted);
+    } else {
+      // Barrier: a concrete block with a hazard band along the top and visible end caps.
+      batch.add(width, height, depth, x, height / 2, z, materials.concrete);
+      batch.add(width + 0.04, 0.2, depth + 0.04, x, height - 0.1, z, materials.haz);
+      batch.add(width + 0.02, 0.1, depth + 0.02, x, 0.05, z, materials.dark);
+    }
+  }
+
+  // Site markings and terminal props: paint is flush, machines sit inside a wall's footprint.
+  for (const site of MAP.sites) {
+    const paint = site.name === 'A' ? materials.haz : materials.painted;
+    for (const dx of [-3.6, 3.6]) batch.add(0.14, 0.012, 7.2, site.x + dx, 0.02, site.z, paint);
+    for (const dz of [-3.6, 3.6]) batch.add(7.2, 0.012, 0.14, site.x, 0.02, site.z + dz, paint);
+    view.sign(site.name + ' / ' + site.label, site.x, 3.6, site.z + 4.2, site.name === 'A' ? '#ffe1a4' : '#b6f3ea', 6.4);
+    batch.add(0.7, 1.15, 0.45, site.x + 2.6, 0.58, site.z - 2.4, materials.steel);
+    batch.add(0.46, 0.3, 0.03, site.x + 2.6, 0.86, site.z - 2.16, new THREE.MeshBasicMaterial({ color: 0x35b591 }));
+    batch.add(0.22, 0.65, 0.22, site.x - 2.7, 0.33, site.z + 2.3, materials.dark);
+  }
+
+  // Skyline outside the walls: warehouse shells, gantry crane, tanks and a moored hull.
+  box(batch, 22, 11, 58, -44, 5.5, -4, materials.concrete);
+  box(batch, 22, 11, 58, 44, 5.5, -4, materials.concrete);
+  for (const x of [-44, 44]) {
+    box(batch, 23, 0.4, 60, x, 11.2, -4, materials.navy);
+    for (let z = -30; z < 26; z += 8) box(batch, 0.1, 2.6, 3.2, x + (x > 0 ? -11.1 : 11.1), 6.6, z, materials.dark);
+  }
+  for (const x of [-24, 24]) {
+    cylinder(batch, 3.6, 13, x, 6, -44, materials.painted);
+    cylinder(batch, 3.75, 0.35, x, 12.4, -44, materials.navy);
+    cylinder(batch, 3.75, 0.35, x, 1.2, -44, materials.navy);
+    box(batch, 0.45, 11, 0.35, x + 3.9, 5.5, -44, materials.steel);
+  }
+  for (const x of [-27, 27]) {
+    box(batch, 0.9, 26, 0.9, x, 13, -38, materials.haz);
+    box(batch, 2.2, 0.8, 2.2, x, 25.4, -38, materials.steel);
+  }
+  box(batch, 56, 1, 1, 0, 26, -38, materials.haz);
+  box(batch, 0.4, 0.4, 26, 0, 26, -26, materials.steel);
+  box(batch, 0.5, 9, 0.5, 0, 17, -14, materials.steel);
+  cylinder(batch, 0.6, 0.8, 0, 12.6, -14, materials.dark);
+  box(batch, 12, 3, 22, 4, 0.9, -66, materials.navy);
+  box(batch, 5.4, 3.4, 5.4, 4, 3, -62, materials.painted);
+  // Mooring line and bollards along the south quay.
+  for (let x = -33; x <= 33; x += 3.2) {
+    cylinder(batch, 0.09, 1.35, x, 0.42, 33, materials.steel);
+    if (Math.round(x) % 6 === 0) cylinder(batch, 0.34, 0.5, x, 0.12, 32.4, materials.haz);
+  }
+  box(batch, 66, 0.09, 0.09, 0, 1.1, 33, materials.steel);
+  view.sign('PELAGIC RELAY / NORTH DOCK', 0, 8.4, -33.4, '#f4dcae', 15);
+  view.sign('AUTHORISED PERSONNEL ONLY', -18, 3.6, 33.2, '#f4dcae', 7.4, Math.PI);
+
+  // Crate stacks and pallets on the quay, all outside movement lanes and off sightlines.
+  for (const [x, z, n] of [[-31, 20, 2], [31, 20, 3], [-31, -30, 2], [31, -30, 2]]) {
+    for (let k = 0; k < n; k++) {
+      batch.add(1.5, 1.1, 1.5, x + (k % 2) * 1.6, 0.55 + Math.floor(k / 2) * 1.1, z, materials.wood);
+      batch.add(1.56, 0.08, 1.56, x + (k % 2) * 1.6, 1.06 + Math.floor(k / 2) * 1.1, z, materials.dark);
+    }
+    batch.add(2.4, 0.14, 2.4, x + 0.8, 0.07, z, materials.wood);
+  }
+  batch.flush(scene);
+  view.buildWeapon();
+}
+
+function box(batch, w, h, d, x, y, z, material) {
+  batch.add(w, h, d, x, y, z, material);
+}
+
+function cylinder(batch, r, h, x, y, z, material) {
+  batch.addShape(new THREE.CylinderGeometry(r, r, h, 12), x, y, z, material);
 }
