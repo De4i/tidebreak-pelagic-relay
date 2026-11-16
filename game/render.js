@@ -34,6 +34,37 @@ const KITS = [
   },
 ];
 
+// Merge only rigid siblings; animated limb groups and muzzle effects stay separate.
+function batchRigidParts(root) {
+  for (const child of [...root.children]) if (child.isGroup) batchRigidParts(child);
+  const groups = new Map();
+  for (const child of root.children) {
+    if (!child.isMesh || !child.castShadow || child.material.transparent) continue;
+    const list = groups.get(child.material) || [];
+    list.push(child); groups.set(child.material, list);
+  }
+  for (const [material, meshes] of groups) {
+    if (meshes.length < 2) continue;
+    const geometries = meshes.map(mesh => {
+      mesh.updateMatrix();
+      return (mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone()).applyMatrix4(mesh.matrix);
+    });
+    const merged = new THREE.BufferGeometry();
+    for (const name of ['position', 'normal', 'uv']) {
+      const attrs = geometries.map(g => g.getAttribute(name));
+      const data = new Float32Array(attrs.reduce((n,a) => n + a.array.length, 0));
+      let offset = 0;
+      for (const a of attrs) { data.set(a.array, offset); offset += a.array.length; }
+      merged.setAttribute(name, new THREE.BufferAttribute(data, attrs[0].itemSize));
+    }
+    const mesh = new THREE.Mesh(merged, material);
+    mesh.castShadow = true;
+    root.add(mesh);
+    for (const old of meshes) { root.remove(old); old.geometry.dispose(); }
+    for (const g of geometries) g.dispose();
+  }
+}
+
 export class View {
   constructor(canvas) {
     this.scene = new THREE.Scene();
@@ -248,6 +279,7 @@ export class View {
     muzzle.visible = false;
     rifle.add(muzzle);
 
+    batchRigidParts(group);
     group.userData = { legs, arms, muzzle, rifle };
     this.scene.add(group);
     this.botMeshes.set(a.id, group);

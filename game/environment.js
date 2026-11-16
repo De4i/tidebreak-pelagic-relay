@@ -72,7 +72,10 @@ function batcher() {
       list.push(geometry);
     },
     flush(scene) {
-      for (const [material, geometries] of groups) {
+      for (const [material, sources] of groups) {
+        // Expand indexed meshes before concatenation: otherwise box/cylinder vertices
+        // are interpreted as unrelated triangles and whole faces disappear or tear.
+        const geometries = sources.map(g => g.index ? g.toNonIndexed() : g);
         const merged = new THREE.BufferGeometry();
         for (const name of ['position', 'normal', 'uv']) {
           const arrays = geometries.map((g) => g.getAttribute(name));
@@ -85,7 +88,7 @@ function batcher() {
         const mesh = new THREE.Mesh(merged, material);
         mesh.castShadow = mesh.receiveShadow = true;
         scene.add(mesh);
-        for (const g of geometries) g.dispose();
+        for (const g of new Set([...sources, ...geometries])) g.dispose();
       }
       groups.clear();
     },
